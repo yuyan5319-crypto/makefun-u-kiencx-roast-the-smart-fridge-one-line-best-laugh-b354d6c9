@@ -10,11 +10,17 @@
 // "probation officer". No milk-ordering cliché: the fridge never shops,
 // it snitches.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const LINE =
+const RAW_LINE =
   "My smart fridge emails my doctor a weekly report on my midnight snacking — I bought a kitchen appliance and got a probation officer with a freezer.";
+
+// Normalize line endings and stray surrounding whitespace so a pasted or
+// re-wrapped copy of the line can never sneak a CR, LF or padding into the
+// entry file; the canonical line above is already clean, so this is a no-op
+// for it and only guards against edits.
+const LINE = RAW_LINE.replace(/\r\n?/g, "\n").trim();
 
 // The gate, applied here before anything is written: the entry must be
 // UTF-8 text of 1 to 160 characters and not only white space. Refuse to
@@ -28,5 +34,10 @@ if (LINE.includes("\n")) {
 
 const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? ".";
 mkdirSync(outputDir, { recursive: true });
-writeFileSync(join(outputDir, "entry.txt"), LINE, "utf8");
+// Write atomically: a temp file in the same directory, then rename, so a
+// crash mid-write can never leave a half-written entry.txt behind.
+const outputPath = join(outputDir, "entry.txt");
+const tempPath = join(outputDir, `.entry.txt.${process.pid}.tmp`);
+writeFileSync(tempPath, LINE, "utf8");
+renameSync(tempPath, outputPath);
 console.log(`wrote entry (${LINE.length} chars): ${LINE}`);
